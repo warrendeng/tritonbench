@@ -3,6 +3,7 @@ from typing import Any, Callable, Generator, List, Optional, Tuple
 
 import torch
 import torch._inductor.config as inductor_config
+from tritonbench.operators.nvfp4_gemm.triton_autows import triton_autows_nvfp4_gemm
 from tritonbench.utils.triton_op import (
     BenchmarkOperator,
     BenchmarkOperatorMetrics,
@@ -127,6 +128,28 @@ class Operator(BenchmarkOperator):
             compiled(a, b)
 
         return lambda: compiled(a, b)
+
+    # Test with --force. This backend currently does not compile: Meta AutoWS
+    # crashes in NVGPUWarpSpecialization for NVFP4 dot_scaled scale TMEM copies.
+    # TODO: Enable once the compiler issue is fixed and runtime gates for Meta
+    # Triton + Blackwell + AutoWS are validated.
+    @register_benchmark(enabled=False, fwd_only=True)
+    def triton_autows_nvfp4_gemm(self, a, b, scale_a, scale_b, m, n, k) -> Callable:
+        out_dtype = self.out_dtype
+
+        def fn():
+            return triton_autows_nvfp4_gemm(
+                a,
+                b,
+                scale_a,
+                scale_b,
+                m,
+                n,
+                k,
+                out_dtype=out_dtype,
+            )
+
+        return fn
 
     @register_metric()
     def flops(
